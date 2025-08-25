@@ -117,7 +117,6 @@ def add_student(request):
         subject = request.POST['subject'].strip().title()
         mark = request.POST['mark']
 
-        print(name)
         student = StudentDetails.objects.filter(name__iexact=name, subject__iexact=subject)
         if student.exists():
             for data in student:
@@ -161,12 +160,16 @@ def update_student(request, pk):
     user = get_object_or_404(User, id=user_id)
 
     if request.method == 'POST':
-        name = request.POST['name'].capitalize()
-        subject = request.POST['subject'].capitalize()
+        name = request.POST['name'].strip().title() 
+        subject = request.POST['subject'].strip().title()
         mark = request.POST['mark']
+        student = StudentDetails.objects.filter(name__iexact=name, subject__iexact=subject)
+        if student.exists():
+            messages.error(request, f"Student with name {name} and subject {subject} already exists!")
 
-        if int(mark) > 100 or int(mark) < 0:
+        elif int(mark) > 100 or int(mark) < 0:
             messages.error(request, "Enter a valid mark between 0 and 100")
+
         else:
             form_data = {'name': name, 'subject': subject, 'mark': mark, 'user': user}
             form = StudentForm(form_data, instance=student)
