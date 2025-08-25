@@ -78,8 +78,10 @@ class StudentDetails(models.Model):
 class AuditLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     student_id = models.PositiveIntegerField()
+    student_name = models.CharField(max_length=50) 
     action = models.CharField(max_length=50) 
+    details = models.TextField(blank=True, null=True)
     timestamp = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.name
+        return self.user

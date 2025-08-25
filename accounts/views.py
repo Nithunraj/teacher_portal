@@ -1,17 +1,42 @@
 from django.shortcuts import render, HttpResponse, redirect, get_object_or_404
+from django.views.decorators.cache import never_cache
 from .forms import UserForm, StudentForm
 from .models import User, StudentDetails, AuditLog
 from django.contrib import messages, auth
 from .utils import verify_password, get_user_session, calculate_new_marks, hash_password
+from django.contrib.auth.decorators import login_required
+from functools import wraps
 
 # Create your views here.
-def log_in_audit(user,action,student_id):
+def log_in_audit(log_details):
     AuditLog.objects.create(
-                user=user,
-                action=action,
-                student_id=student_id,
+                user=log_details['user'],
+                action=log_details['action'],
+                student_name = log_details['student_name'],
+                student_id=log_details['student_id'],
+                details = log_details['details'],
             )
     return "Logged Successfully"
+
+def superuser_login(request, username, password):
+    user = auth.authenticate(username=username,password=password)
+    if user is not None:
+        auth.login(request,user)
+        messages.success(request, "You are now logged in!")
+        return '/admin/'
+    else:
+        messages.error(request, "Invalid login credentials")
+        return 'login'
+    
+def session_login_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        print("Checking session...")
+        if not request.session.get('user_id'):
+            return redirect('login')  # your login URL name
+        print("Has session")
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 def login(request):
     if request.method == 'POST':
@@ -25,8 +50,8 @@ def login(request):
             return HttpResponse("Invalid username or password")
         
         if user.is_superuser:
-            return redirect('/admin/')
-            
+           redirect_val = superuser_login(request, username, password)
+           return redirect(redirect_val)
         
         elif verify_password(user.password, password):
             request.session['user_id'] = user.id
@@ -64,7 +89,8 @@ def logout(request):
     messages.info(request, 'You are logged out.')
     return redirect('home')
 
-
+@never_cache
+@session_login_required
 def dashboard(request):
     user_id = request.session.get('user_id')
 
@@ -87,15 +113,17 @@ def add_student(request):
     user = get_object_or_404(User, id=user_id)
 
     if request.method == 'POST':
-        name = request.POST['name'].capitalize()
-        subject = request.POST['subject'].capitalize()
+        name = request.POST['name'].strip().title() 
+        subject = request.POST['subject'].strip().title()
         mark = request.POST['mark']
 
-        student = StudentDetails.objects.filter(name=name, subject=subject)
+        print(name)
+        student = StudentDetails.objects.filter(name__iexact=name, subject__iexact=subject)
         if student.exists():
             for data in student:
                 student_id = data.id
-                mark_calculation, updated_mark = calculate_new_marks(mark, data.mark)
+                previous_mark = data.mark
+                mark_calculation, updated_mark = calculate_new_marks(mark, previous_mark)
                 if mark_calculation == 'Exceeds':
                     messages.error(request, "Student already exits - Failed to update - Exceeds 100")
                 elif mark_calculation == 'Below':
@@ -103,7 +131,14 @@ def add_student(request):
                 else:
                     messages.success(request, "Student already exits - successfully updated the mark")
                     data.mark = updated_mark
-                    log_in_audit(user, 'updated', student_id)
+                    log_details = {
+                        'user': user,
+                        'action': 'Updated',
+                        'student_name':data.name,
+                        'student_id':student_id,
+                        'details':'Student ' + str(data.subject) + ' mark is updated from ' + str(previous_mark) + ' to ' + str(updated_mark)
+                    }
+                    log_in_audit(log_details)
                     data.save()  
 
         else:
@@ -137,7 +172,14 @@ def update_student(request, pk):
             form = StudentForm(form_data, instance=student)
             if form.is_valid():
                 form.save()
-                log_in_audit(user, 'updated', pk)
+                log_details = {
+                    'user': user,
+                    'action': 'Updated',
+                    'student_name':student.name,
+                    'student_id':pk,
+                    'details':'Student details has been updated'
+                }
+                log_in_audit(log_details)
                 messages.success(request, "Student details sucessfully updated!")
     return redirect("dashboard")
 
@@ -147,5 +189,22 @@ def delete_student(request, pk):
 
     student = get_object_or_404(StudentDetails, id=pk)
     student.delete()
-    log_in_audit(user, 'Deleted', pk)
+    log_details = {
+        'user': user,
+        'action': 'Deleted',
+        'student_name':student.name,
+        'student_id':pk,
+        'details':'Student data from ' + str(student.subject) + ' has been deleted'
+    }
+    log_in_audit(log_details)
+    messages.success(request, "Student from sucessfully deleted!")
     return  redirect("dashboard")
+
+def logs(request):
+    log_details = AuditLog.objects.all()
+
+    context = {
+        'logs' : log_details,
+    }
+
+    return render(request, 'accounts/logs.html', context)
