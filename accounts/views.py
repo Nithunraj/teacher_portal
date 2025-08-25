@@ -124,9 +124,24 @@ def add_student(request):
                 previous_mark = data.mark
                 mark_calculation, updated_mark = calculate_new_marks(mark, previous_mark)
                 if mark_calculation == 'Exceeds':
-                    messages.error(request, "Student already exits - Failed to update - Exceeds 100")
+                    log_details = {
+                        'user': user,
+                        'action': 'Updated',
+                        'student_name':data.name,
+                        'student_id':student_id,
+                        'details':'Student already exits - Failed to update - Exceeds 100'
+                    }
+                    messages.error(request, "Student already exits - Failed to update mark - Exceeds 100")
                 elif mark_calculation == 'Below':
-                    messages.error(request, "Student already exits - Failed to update - less tham 0")
+                    log_details = {
+                        'user': user,
+                        'action': 'Updated',
+                        'student_name':data.name,
+                        'student_id':student_id,
+                        'details':'Student already exits - Failed to update mark - less than 0'
+                    }
+                    messages.error(request, "Student already exits - Failed to update - less than 0")
+
                 else:
                     messages.success(request, "Student already exits - successfully updated the mark")
                     data.mark = updated_mark
@@ -137,8 +152,8 @@ def add_student(request):
                         'student_id':student_id,
                         'details':'Student ' + str(data.subject) + ' mark is updated from ' + str(previous_mark) + ' to ' + str(updated_mark)
                     }
-                    log_in_audit(log_details)
-                    data.save()  
+                    data.save()
+                log_in_audit(log_details)
 
         else:
             if int(mark) > 100 or int(mark) < 0:
