@@ -163,11 +163,8 @@ def update_student(request, pk):
         name = request.POST['name'].strip().title() 
         subject = request.POST['subject'].strip().title()
         mark = request.POST['mark']
-        student = StudentDetails.objects.filter(name__iexact=name, subject__iexact=subject)
-        if student.exists():
-            messages.error(request, f"Student with name {name} and subject {subject} already exists!")
-
-        elif int(mark) > 100 or int(mark) < 0:
+        
+        if int(mark) > 100 or int(mark) < 0:
             messages.error(request, "Enter a valid mark between 0 and 100")
 
         else:
